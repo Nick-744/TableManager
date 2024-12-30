@@ -415,7 +415,7 @@ class TableManagerGUI:
             self.save_completed_order(table)
         table.complete_order()
         self.refresh_table_ui(table)
-        # If needed, also update the menu's background if no table is selected
+        # Update the menu's background if no table is selected
         if not table.orders:
             self.update_menu_color("white")  # Default color
         self.unselect_table()
@@ -474,7 +474,8 @@ class TableManagerGUI:
 
         # Print to terminal
         price = self.price_map.get(iname, 0.0)
-        print(f"Τραπέζι {self.selected_table.table_id} => +1 {iname} {price:.2f}€") # Don't forget the menu_remove_item string!
+        print(f"Τραπέζι {self.selected_table.table_id} => "
+              f"+1 {iname} {price:.2f}€ - {datetime.now().strftime("%H:%M:%S")}") # Don't forget the menu_remove_item string!
 
         return;
 
@@ -489,7 +490,8 @@ class TableManagerGUI:
 
         # Print to terminal
         price = self.price_map.get(iname, 0.0)
-        print(f"Τραπέζι {self.selected_table.table_id} => -1 {iname} {price:.2f}€")
+        print(f"Τραπέζι {self.selected_table.table_id} => "
+              f"-1 {iname} {price:.2f}€ - {datetime.now().strftime("%H:%M:%S")}")
 
         return;
 
