@@ -568,8 +568,8 @@ class TableManagerGUI:
         order_details.append(separator)
 
         # Print to the terminal
-        print(separator, end='')  # Start with separator
-        print(''.join(order_details))  # end='' to avoid adding extra newlines
+        print(separator, end='')
+        print(''.join(order_details), end='')
 
         try:
             with open(completed_orders_file, "a", encoding="utf-8") as f:
