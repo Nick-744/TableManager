@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter.messagebox import askyesno
 from os.path import join, dirname, abspath, exists
+from os import makedirs
 from datetime import datetime
 
 ###################################################
@@ -496,13 +497,17 @@ class TableManagerGUI:
     #                   TIMER METHODS                 #
     ###################################################
     def start_auto_save(self):
-        """Start the auto-save timer to save orders every 4 minutes."""
+        """Start the auto-save timer to save orders every 2 minutes."""
         self.save_orders_timer()
         return;
 
     def save_orders_timer(self):
         """Save orders and reschedule the timer."""
-        save_orders(self.tables, "orders.txt")
+        script_dir =     dirname(abspath(__file__))
+        ordersData_dir = "ordersData"
+        orders_file =    join(script_dir, ordersData_dir, "orders.txt")
+
+        save_orders(self.tables, orders_file)
         self.root.after(120000, self.save_orders_timer) # Schedule the next save
 
         return;
@@ -540,30 +545,51 @@ class TableManagerGUI:
     ###################################################
     def save_completed_order(self, table):
         """
-        Save the completed order to 'completed_orders.txt' with all details.
+        Save the completed order to 'completed_orders.txt' with all details
+        and print the details to the terminal.
         """
+        script_dir = dirname(abspath(__file__))
+        ordersData_dir = "ordersData"
+        completed_orders_file = join(script_dir, ordersData_dir, "completed_orders.txt")
+
+        # Prepare the order details
+        order_details = []
+        order_details.append(f"Τραπέζι {table.table_id}\n")
+        order_details.append(f"Έναρξη: {table.start_time}\n")
+        order_details.append("Παραγγελίες:\n")
+        for iname, qty in table.orders.items():
+            price = self.price_map.get(iname, 0.0)
+            line = f" - {iname}: {qty} x {price:.2f}€ = {qty * price:.2f}€\n"
+            order_details.append(line)
+        total = table.get_total(self.price_map)
+        order_details.append(f"Σύνολο: €{total:.2f}\n")
+        order_details.append(f"Ολοκλήρωση: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        separator = "-" * 40 + "\n"
+        order_details.append(separator)
+
+        # Print to the terminal
+        print(separator, end='')  # Start with separator
+        print(''.join(order_details))  # end='' to avoid adding extra newlines
+
         try:
-            with open("completed_orders.txt", "a", encoding="utf-8") as f:
-                f.write(f"Τραπέζι {table.table_id}\n")
-                f.write(f"Έναρξη: {table.start_time}\n")
-                f.write("Παραγγελίες:\n")
-                for iname, qty in table.orders.items():
-                    price = self.price_map.get(iname, 0.0)
-                    f.write(f" - {iname}: {qty} x {price:.2f}€ = {qty * price:.2f}€\n")
-                total = table.get_total(self.price_map)
-                f.write(f"Σύνολο: €{total:.2f}\n")
-                f.write(f"Ολοκλήρωση: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write("-" * 40 + "\n")
+            with open(completed_orders_file, "a", encoding="utf-8") as f:
+                for detail in order_details: # Write to the file
+                    f.write(detail)
+
         except Exception as e:
             print(f"[!] Error saving completed order: {e}")
-        
+
         return;
 
     ###################################################
     #                   ON CLOSE                      #
     ###################################################
     def on_close(self):
-        save_orders(self.tables, "orders.txt")
+        script_dir =     dirname(abspath(__file__))
+        ordersData_dir = "ordersData"
+        orders_file =    join(script_dir, ordersData_dir, "orders.txt")
+
+        save_orders(self.tables, orders_file)
         if askyesno("Έξοδος", "Είστε σίγουρος/η ότι θέλετε να κλείσετε την εφαρμογή;"):
             exit();
 
@@ -574,9 +600,18 @@ class TableManagerGUI:
 ###################################################
 def main():
     script_dir =    dirname(abspath(__file__))
-    settings_file = join(script_dir, "settings.txt")
-    menu_file =     join(script_dir, "menu.txt")
-    orders_file =   join(script_dir, "orders.txt")
+
+    appData_dir =   "appData"
+    settings_file = join(script_dir, appData_dir, "settings.txt")
+    menu_file =     join(script_dir, appData_dir, "menu.txt")
+
+    ordersData_dir = "ordersData"
+    orders_file =    join(script_dir, ordersData_dir, "orders.txt")
+
+    # Ensure directories exist
+    for directory in [appData_dir, ordersData_dir]:
+        if not exists(directory):
+            makedirs(directory)
 
     settings = load_settings(settings_file)
     num_tables = int(settings.get("ARITHMOS_TRAPEZION", 12))
