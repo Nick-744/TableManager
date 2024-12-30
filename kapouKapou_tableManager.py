@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter.messagebox import askyesno
 from os.path import join, dirname, abspath, exists
 from datetime import datetime
 
@@ -254,8 +254,14 @@ class TableManagerGUI:
         # Store menu_dict for building categorized menu
         self.menu_dict = menu_dict
 
+        # Bind mouse wheel events to the menu canvas
+        self.bind_mouse_wheel(self.menu_canvas)
+
         # Build the categorized, scrollable menu items
         self.build_menu_items()
+
+        # Start the auto-save timer
+        self.start_auto_save()
 
         # On close => save
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -359,6 +365,16 @@ class TableManagerGUI:
 
         return;
 
+    def unselect_table(self):
+        if self.selected_table is not None:
+            self.selected_table = None
+            # Refresh all tables to remove highlighting
+            for t in self.tables:
+                self.refresh_table_ui(t)
+            self.update_menu_color("white") # Reset menu background color to default
+
+        return;
+
     def update_menu_color(self, color):
         """
         Update the background color of the menu to match the selected table's color.
@@ -374,6 +390,8 @@ class TableManagerGUI:
         # Recursively update background of all child widgets in menu_inner_frame
         self.update_widget_bg(self.menu_inner_frame, color)
 
+        return;
+
     def update_widget_bg(self, widget, color):
         """
         Recursively update the background color of the given widget and its children.
@@ -386,10 +404,14 @@ class TableManagerGUI:
         for child in widget.winfo_children():
             self.update_widget_bg(child, color)
 
+        return;
+
     def complete_order(self, table):
-        response = messagebox.askyesno("Ερώτηση", "Είσαι σίγουρος/η;")
-        if not response:
+        if not askyesno("Ερώτηση", "Είσαι σίγουρος/η;"):
             return;
+
+        if table.orders:
+            self.save_completed_order(table)
         table.complete_order()
         self.refresh_table_ui(table)
         # If needed, also update the menu's background if no table is selected
@@ -445,27 +467,96 @@ class TableManagerGUI:
     def menu_add_item(self, iname):
         if not self.selected_table:
             return;
+
         self.selected_table.add_item(iname, 1)
         self.refresh_table_ui(self.selected_table)
+
+        # Print to terminal
+        price = self.price_map.get(iname, 0.0)
+        print(f"Τραπέζι {self.selected_table.table_id} => +1 {iname} {price:.2f}€") # Don't forget the menu_remove_item string!
 
         return;
 
     def menu_remove_item(self, iname):
         if not self.selected_table:
             return;
+        if iname not in self.selected_table.orders:
+            return;
+
         self.selected_table.remove_item(iname, 1)
         self.refresh_table_ui(self.selected_table)
 
+        # Print to terminal
+        price = self.price_map.get(iname, 0.0)
+        print(f"Τραπέζι {self.selected_table.table_id} => -1 {iname} {price:.2f}€")
+
         return;
 
-    def unselect_table(self):
-        if self.selected_table is not None:
-            self.selected_table = None
-            # Refresh all tables to remove highlighting
-            for t in self.tables:
-                self.refresh_table_ui(t)
-            self.update_menu_color("white") # Reset menu background color to default
+    ###################################################
+    #                   TIMER METHODS                 #
+    ###################################################
+    def start_auto_save(self):
+        """Start the auto-save timer to save orders every 4 minutes."""
+        self.save_orders_timer()
+        return;
 
+    def save_orders_timer(self):
+        """Save orders and reschedule the timer."""
+        save_orders(self.tables, "orders.txt")
+        self.root.after(120000, self.save_orders_timer) # Schedule the next save
+
+        return;
+
+    ###################################################
+    #              MOUSE WHEEL SCROLLING              #
+    ###################################################
+    def bind_mouse_wheel(self, widget):
+        """
+        Bind mouse wheel events to the given widget for scrolling.
+        Handles different operating systems.
+        """
+        widget.bind("<Enter>", lambda e: self.bind_to_mousewheel(widget))
+        widget.bind("<Leave>", lambda e: self.unbind_from_mousewheel(widget))
+
+        return;
+
+    def bind_to_mousewheel(self, widget):
+        widget.bind_all("<MouseWheel>", lambda event: self.on_mousewheel(event, widget))
+        return;
+
+    def unbind_from_mousewheel(self, widget):
+        widget.unbind_all("<MouseWheel>")
+        return;
+
+    def on_mousewheel(self, event, widget):
+        """
+        Handle mouse wheel scrolling.
+        """
+        widget.yview_scroll(int(-1*(event.delta/120)), "units")
+        return;
+
+    ###################################################
+    #        SAVE COMPLETED ORDERS TO FILE            #
+    ###################################################
+    def save_completed_order(self, table):
+        """
+        Save the completed order to 'completed_orders.txt' with all details.
+        """
+        try:
+            with open("completed_orders.txt", "a", encoding="utf-8") as f:
+                f.write(f"Τραπέζι {table.table_id}\n")
+                f.write(f"Έναρξη: {table.start_time}\n")
+                f.write("Παραγγελίες:\n")
+                for iname, qty in table.orders.items():
+                    price = self.price_map.get(iname, 0.0)
+                    f.write(f" - {iname}: {qty} x {price:.2f}€ = {qty * price:.2f}€\n")
+                total = table.get_total(self.price_map)
+                f.write(f"Σύνολο: €{total:.2f}\n")
+                f.write(f"Ολοκλήρωση: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("-" * 40 + "\n")
+        except Exception as e:
+            print(f"[!] Error saving completed order: {e}")
+        
         return;
 
     ###################################################
@@ -473,7 +564,8 @@ class TableManagerGUI:
     ###################################################
     def on_close(self):
         save_orders(self.tables, "orders.txt")
-        self.root.destroy()
+        if askyesno("Έξοδος", "Είστε σίγουρος/η ότι θέλετε να κλείσετε την εφαρμογή;"):
+            exit();
 
         return;
 
